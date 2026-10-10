@@ -127,6 +127,23 @@ describe('Derive Engine', () => {
       ).toEqual({ current: 0, longest: 0, milestoneAwards: 0 });
     });
 
+    it('returns all zeros when startDate is after today (both loops no-op)', () => {
+      expect(
+        deriveStreakStats(new Set(), new Set(), '2026-04-20', '2026-04-17'),
+      ).toEqual({ current: 0, longest: 0, milestoneAwards: 0 });
+    });
+
+    it('counts a single check-in when startDate equals today', () => {
+      expect(
+        deriveStreakStats(
+          new Set(['2026-04-17']),
+          new Set(),
+          '2026-04-17',
+          '2026-04-17',
+        ),
+      ).toEqual({ current: 1, longest: 1, milestoneAwards: 0 });
+    });
+
     it('lets a check-in win when a day is both checked in and frozen', () => {
       expect(
         deriveStreakStats(
@@ -164,6 +181,10 @@ describe('Derive Engine', () => {
   describe('deriveFreezesAvailable', () => {
     it('starts with 2 freezes at level 1', () => {
       expect(deriveFreezesAvailable(1, 0, 0)).toBe(2);
+    });
+
+    it('combines level, milestone, and consumed terms in range without clamping', () => {
+      expect(deriveFreezesAvailable(2, 1, 0)).toBe(4);
     });
 
     it('clamps to the upper cap of 5', () => {
