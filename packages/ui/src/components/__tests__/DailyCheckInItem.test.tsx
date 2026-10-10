@@ -21,6 +21,9 @@ vi.mock('storage', () => {
         return { action: 'added', xp: 12 };
       }
     }),
+    renameHabit: vi.fn().mockResolvedValue(undefined),
+    archiveHabit: vi.fn().mockResolvedValue(undefined),
+    deleteHabit: vi.fn().mockResolvedValue(undefined),
     __setMockCheckIn: (val: any) => { mockCheckIn = val; },
     __setMockStreak: (val: any) => { mockStreak = val; }
   };

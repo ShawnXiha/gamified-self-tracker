@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCheckIn, toggleCheckIn, useStreak } from 'storage';
 import { XPToast } from './XPToast';
 import { StreakFlame } from './StreakFlame';
+import { HabitActionsMenu } from './HabitActionsMenu';
 import { trackEvent, getTimeOfDay } from '../lib/analytics';
 
 interface DailyCheckInItemProps {
@@ -57,7 +58,8 @@ export const DailyCheckInItem: React.FC<DailyCheckInItemProps> = ({ habitId, hab
         {habitTitle && <span className="text-lg font-medium text-gray-800 truncate">{habitTitle}</span>}
       </div>
       
-      <div className="flex-shrink-0 flex items-center justify-end min-w-[3rem]">
+      <div className="flex-shrink-0 flex items-center justify-end gap-2 min-w-[3rem]">
+        <HabitActionsMenu habitId={habitId} habitTitle={habitTitle} />
         {streak && streak.current_streak > 0 && <StreakFlame streak={streak.current_streak} />}
       </div>
       

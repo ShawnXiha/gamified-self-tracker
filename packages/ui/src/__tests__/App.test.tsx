@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { App } from '../App';
-import { useHabits, addHabit, runNightlyEvaluation, useWeeklySummary, useCheckIn, useStreak, toggleCheckIn } from 'storage';
+import { useHabits, addHabit, runNightlyEvaluation, useWeeklySummary, useCheckIn, useStreak, toggleCheckIn, useArchivedHabits } from 'storage';
 
 // Mock the storage hooks
 vi.mock('storage', () => ({
@@ -11,6 +11,7 @@ vi.mock('storage', () => ({
   useWeeklySummary: vi.fn().mockReturnValue({ show: false, summary: null, dismiss: vi.fn() }),
   useCheckIn: vi.fn().mockReturnValue(null),
   useStreak: vi.fn().mockReturnValue(0),
+  useArchivedHabits: vi.fn().mockReturnValue([]),
   useUserStats: vi.fn().mockReturnValue({ total_xp: 0, current_level: 1 }),
   useLogicalDate: vi.fn().mockReturnValue('2026-05-11'),
   toggleCheckIn: vi.fn(),
@@ -36,6 +37,7 @@ describe('App & Habit CRUD UI', () => {
     vi.resetAllMocks();
     vi.mocked(runNightlyEvaluation).mockResolvedValue(undefined);
     vi.mocked(useWeeklySummary).mockReturnValue({ show: false, summary: null, dismiss: vi.fn() });
+    vi.mocked(useArchivedHabits).mockReturnValue([]);
   });
 
   it('runs nightly evaluation on boot', async () => {

@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useHabits, runNightlyEvaluation } from 'storage';
+import { useHabits, useArchivedHabits, runNightlyEvaluation } from 'storage';
 import { HabitList } from './components/HabitList';
 import { CreateHabitForm } from './components/CreateHabitForm';
 import { WeeklySummaryModal } from './components/WeeklySummaryModal';
 import { GamificationHeader } from './components/GamificationHeader';
+import { ArchivedHabitsModal } from './components/ArchivedHabitsModal';
 import { trackEvent, isPwaInstalled, getDeviceType } from './lib/analytics';
 
 export const App: React.FC = () => {
   const habits = useHabits();
+  const archivedHabits = useArchivedHabits();
+  const [showArchived, setShowArchived] = useState(false);
   const [isBooted, setIsBooted] = useState(false);
 
   useEffect(() => {
@@ -52,6 +55,16 @@ export const App: React.FC = () => {
       <div className="mt-8">
         <HabitList habits={habits} />
       </div>
+      <div className="mt-6 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setShowArchived(true)}
+          className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
+        >
+          Archived ({archivedHabits.length})
+        </button>
+      </div>
+      {showArchived && <ArchivedHabitsModal onClose={() => setShowArchived(false)} />}
     </div>
   );
 };

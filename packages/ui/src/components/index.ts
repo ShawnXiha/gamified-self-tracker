@@ -7,3 +7,7 @@ export * from './StreakFlame';
 export * from './XPToast';
 export * from './WeeklySummaryModal';
 export * from './ErrorBoundary';
+export * from './HabitActionsMenu';
+export * from './EditHabitModal';
+export * from './ArchivedHabitsModal';
+export * from './ConfirmDialog';
