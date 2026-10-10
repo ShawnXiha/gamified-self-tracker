@@ -107,11 +107,12 @@
 - 双模式：dev → console；prod → PostHog（`VITE_POSTHOG_KEY` 存在才 init，否则 no-op + console.warn）
 - Sentry 错误监控：`VITE_SENTRY_DSN` env-gated（无 DSN 则 no-op）
 - 删除 `ui/src/lib/analytics.ts`，UI 改从 `'analytics'` 导入
-- 保留现有依赖（@sentry/react、posthog-js），无新增依赖
+- 依赖迁移：`posthog-js`、`@sentry/react` 从 ui 移至 analytics 包（ui 不再直接依赖），无新增第三方依赖
 
 ## 设计段 5：E2E（Playwright）
 
 - 在 `tests/e2e` 建独立 package（`@playwright/test`），`playwright.config.ts` 指向 `packages/ui` 的 vite dev/preview server
+- 工程注意：根 workspaces 目前只含 `packages/*`，需把 `tests/e2e` 加入根 workspaces 或单独管理依赖（实现计划中定夺）
 - 用例覆盖核心旅程：
   1. 创建习惯 → 出现在列表
   2. 打卡 → XP toast 出现 → 再次点击取消
