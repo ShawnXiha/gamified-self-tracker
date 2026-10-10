@@ -5,7 +5,7 @@ import { CreateHabitForm } from './components/CreateHabitForm';
 import { WeeklySummaryModal } from './components/WeeklySummaryModal';
 import { GamificationHeader } from './components/GamificationHeader';
 import { ArchivedHabitsModal } from './components/ArchivedHabitsModal';
-import { trackEvent, isPwaInstalled, getDeviceType } from './lib/analytics';
+import { trackEvent, isPwaInstalled, getDeviceType } from 'analytics';
 import { downloadBackup } from './lib/download';
 
 export const App: React.FC = () => {
@@ -49,6 +49,7 @@ export const App: React.FC = () => {
     try {
       const payload = await exportBackup();
       downloadBackup(payload);
+      trackEvent({ name: 'backup_exported', properties: {} });
     } catch (error) {
       console.error('Failed to export backup:', error);
     } finally {

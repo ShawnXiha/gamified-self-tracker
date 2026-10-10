@@ -3,7 +3,7 @@ import { useCheckIn, toggleCheckIn, useStreak } from 'storage';
 import { XPToast } from './XPToast';
 import { StreakFlame } from './StreakFlame';
 import { HabitActionsMenu } from './HabitActionsMenu';
-import { trackEvent, getTimeOfDay } from '../lib/analytics';
+import { trackEvent, getTimeOfDay } from 'analytics';
 
 interface DailyCheckInItemProps {
   habitId: string;

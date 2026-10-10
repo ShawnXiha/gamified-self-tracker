@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { renameHabit } from 'storage';
+import { trackEvent } from 'analytics';
 
 interface EditHabitModalProps {
   habitId: string;
@@ -34,6 +35,7 @@ export const EditHabitModal: React.FC<EditHabitModalProps> = ({ habitId, initial
     setSaving(true);
     try {
       await renameHabit(habitId, title);
+      trackEvent({ name: 'habit_renamed', properties: { habit_id: habitId } });
       onClose();
     } catch (error) {
       console.error('Failed to rename habit:', error);

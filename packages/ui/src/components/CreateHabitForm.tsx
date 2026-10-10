@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { addHabit } from 'storage';
-import { trackEvent } from '../lib/analytics';
+import { trackEvent } from 'analytics';
 
 export const CreateHabitForm: React.FC = () => {
   const [title, setTitle] = useState('');

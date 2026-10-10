@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { archiveHabit, deleteHabit } from 'storage';
+import { trackEvent } from 'analytics';
 import { EditHabitModal } from './EditHabitModal';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -33,6 +34,7 @@ export const HabitActionsMenu: React.FC<HabitActionsMenuProps> = ({ habitId, hab
     setIsOpen(false);
     try {
       await archiveHabit(habitId);
+      trackEvent({ name: 'habit_archived', properties: { habit_id: habitId } });
     } catch (error) {
       console.error('Failed to archive habit:', error);
     }

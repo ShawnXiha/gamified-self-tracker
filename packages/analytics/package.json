@@ -1,0 +1,22 @@
+{
+  "name": "analytics",
+  "version": "1.0.0",
+  "description": "Analytics/observability: env-gated PostHog + Sentry init and typed event tracking",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@sentry/react": "^10.49.0",
+    "posthog-js": "^1.369.3"
+  },
+  "devDependencies": {
+    "jsdom": "^29.0.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  }
+}

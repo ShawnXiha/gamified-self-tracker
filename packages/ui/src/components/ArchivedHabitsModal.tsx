@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useArchivedHabits, unarchiveHabit, deleteHabit } from 'storage';
+import { trackEvent } from 'analytics';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface ArchivedHabitsModalProps {
@@ -33,6 +34,7 @@ export const ArchivedHabitsModal: React.FC<ArchivedHabitsModalProps> = ({ onClos
   const handleRestore = async (habitId: string) => {
     try {
       await unarchiveHabit(habitId);
+      trackEvent({ name: 'habit_unarchived', properties: { habit_id: habitId } });
     } catch (error) {
       console.error('Failed to unarchive habit:', error);
     }
@@ -45,6 +47,7 @@ export const ArchivedHabitsModal: React.FC<ArchivedHabitsModalProps> = ({ onClos
     setConfirmDeleteId(null);
     try {
       await deleteHabit(habitId);
+      trackEvent({ name: 'habit_deleted', properties: { habit_id: habitId } });
     } catch (error) {
       console.error('Failed to delete habit:', error);
     }
