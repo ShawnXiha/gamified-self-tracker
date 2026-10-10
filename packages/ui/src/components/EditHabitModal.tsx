@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { renameHabit } from 'storage';
 
 interface EditHabitModalProps {
@@ -9,20 +9,35 @@ interface EditHabitModalProps {
 
 /**
  * Renames a habit. Prefilled with the current title; Save is disabled for
- * empty/whitespace-only input (renameHabit also rejects it).
+ * empty/whitespace input (renameHabit also rejects it) and while the rename
+ * is in flight, so edits made mid-await cannot be double-submitted under a
+ * stale title. Escape closes without saving.
  */
 export const EditHabitModal: React.FC<EditHabitModalProps> = ({ habitId, initialTitle, onClose }) => {
   const [title, setTitle] = useState(initialTitle);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || saving) return;
 
+    setSaving(true);
     try {
       await renameHabit(habitId, title);
       onClose();
     } catch (error) {
       console.error('Failed to rename habit:', error);
+      setSaving(false);
     }
   };
 
@@ -40,6 +55,7 @@ export const EditHabitModal: React.FC<EditHabitModalProps> = ({ habitId, initial
           aria-label="Habit title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          autoFocus
           className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm mb-4"
         />
         <div className="flex justify-end gap-2">
@@ -52,10 +68,10 @@ export const EditHabitModal: React.FC<EditHabitModalProps> = ({ habitId, initial
           </button>
           <button
             type="submit"
-            disabled={!title.trim()}
+            disabled={!title.trim() || saving}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm"
           >
-            Save
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>

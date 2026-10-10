@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { archiveHabit, deleteHabit } from 'storage';
 import { EditHabitModal } from './EditHabitModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -10,12 +10,24 @@ interface HabitActionsMenuProps {
 
 /**
  * ⋯ dropdown per habit row: Edit (rename), Archive (no confirmation —
- * recoverable), Delete (ConfirmDialog — permanent).
+ * recoverable), Delete (ConfirmDialog — permanent). Escape closes the open
+ * menu; no outside-click or arrow-key navigation by design.
  */
 export const HabitActionsMenu: React.FC<HabitActionsMenuProps> = ({ habitId, habitTitle }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   const handleArchive = async () => {
     setIsOpen(false);

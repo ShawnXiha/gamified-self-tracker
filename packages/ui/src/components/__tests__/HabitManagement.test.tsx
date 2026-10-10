@@ -198,4 +198,113 @@ describe('Habit management UI (edit / archive / delete / archived list)', () => 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: /^Archived \(0\)$/ })).toBeInTheDocument();
   });
+
+  it('closes the actions menu with Escape without taking an action', async () => {
+    await seedHabit('h1', 'Drink Water');
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Drink Water')).toBeInTheDocument());
+
+    await openMenuFor('Drink Water');
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(screen.getByText('Drink Water')).toBeInTheDocument();
+  });
+
+  it('closes the edit modal with Escape without renaming', async () => {
+    await seedHabit('h1', 'Drink Water');
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Drink Water')).toBeInTheDocument());
+
+    await openMenuFor('Drink Water');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+
+    const input = screen.getByLabelText('Habit title');
+    fireEvent.change(input, { target: { value: 'Should Not Save' } });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Drink Water')).toBeInTheDocument();
+    expect(screen.queryByText('Should Not Save')).not.toBeInTheDocument();
+  });
+
+  it('Escape on the delete confirmation cancels and keeps the habit', async () => {
+    await seedHabit('h1', 'Drink Water');
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Drink Water')).toBeInTheDocument());
+
+    await openMenuFor('Drink Water');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    await waitFor(() => expect(screen.getByRole('alertdialog', { name: 'Delete habit?' })).toBeInTheDocument());
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Drink Water')).toBeInTheDocument();
+  });
+
+  it('Escape closes the archived modal, but closes the inner delete confirmation first', async () => {
+    await seedHabit('h1', 'Drink Water', true);
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Archived \(1\)$/ })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Archived \(1\)$/ }));
+    const modal = await waitFor(() => screen.getByRole('dialog', { name: 'Archived Habits' }));
+    await waitFor(() => expect(within(modal).getByText('Drink Water')).toBeInTheDocument());
+
+    // First Escape closes the inner confirmation, keeping the modal open.
+    fireEvent.click(within(modal).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.getByRole('alertdialog', { name: 'Delete habit?' })).toBeInTheDocument());
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('dialog', { name: 'Archived Habits' })).toBeInTheDocument();
+
+    // Second Escape closes the archived modal itself; the habit stays archived.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Archived \(1\)$/ })).toBeInTheDocument();
+  });
+
+  it('disables Save while renameHabit is in flight and ignores edits during the await', async () => {
+    const storageNs = await import('storage');
+    const renameSpy = vi.spyOn(storageNs, 'renameHabit').mockImplementation(
+      async () => {
+        await new Promise(resolve => setTimeout(resolve, 60));
+      },
+    );
+
+    try {
+      await seedHabit('h1', 'Drink Water');
+      render(<App />);
+      await waitFor(() => expect(screen.getByText('Drink Water')).toBeInTheDocument());
+
+      await openMenuFor('Drink Water');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+
+      const input = screen.getByLabelText('Habit title');
+      fireEvent.change(input, { target: { value: 'New Title' } });
+
+      // Keep the element reference: its label changes to "Saving…" mid-await.
+      const saveButton = screen.getByRole('button', { name: 'Save' });
+      await act(async () => {
+        fireEvent.click(saveButton);
+      });
+
+      await waitFor(() => expect(saveButton).toBeDisabled());
+      expect(renameSpy).toHaveBeenCalledTimes(1);
+
+      // Editing the input mid-await must not lead to a second rename call.
+      fireEvent.change(input, { target: { value: 'Edited Mid-Await' } });
+      expect(renameSpy).toHaveBeenCalledTimes(1);
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(renameSpy).toHaveBeenCalledWith('h1', 'New Title');
+    } finally {
+      renameSpy.mockRestore();
+    }
+  });
 });

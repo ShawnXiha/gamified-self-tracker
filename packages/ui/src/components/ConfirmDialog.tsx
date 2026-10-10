@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface ConfirmDialogProps {
   title: string;
@@ -10,7 +10,8 @@ interface ConfirmDialogProps {
 
 /**
  * Modal confirmation for destructive actions. Fully controlled: the parent
- * decides whether it is mounted and what happens on confirm/cancel.
+ * decides whether it is mounted and what happens on confirm/cancel. Escape
+ * cancels; focus lands on Cancel on open (safe default for destructive flows).
  */
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title,
@@ -19,6 +20,16 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
   return (
     <div
       role="alertdialog"
@@ -33,6 +44,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <button
             type="button"
             onClick={onCancel}
+            autoFocus
             className="px-4 py-2 rounded-lg text-gray-600 font-medium hover:bg-gray-100 transition-colors"
           >
             Cancel

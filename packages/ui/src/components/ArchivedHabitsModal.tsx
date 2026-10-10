@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useArchivedHabits, unarchiveHabit, deleteHabit } from 'storage';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -9,13 +9,26 @@ interface ArchivedHabitsModalProps {
 /**
  * Lists archived habits (history kept, hidden from the daily list). Each row
  * can be restored (no confirmation — recoverable) or permanently deleted
- * (ConfirmDialog, since it also removes the check-in history).
+ * (ConfirmDialog, since it also removes the check-in history). Escape closes
+ * the modal — unless the inner delete confirmation is open, which consumes the
+ * Escape first.
  */
 export const ArchivedHabitsModal: React.FC<ArchivedHabitsModalProps> = ({ onClose }) => {
   const archivedHabits = useArchivedHabits();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const habitToDelete = archivedHabits.find(h => h.id === confirmDeleteId) ?? null;
+
+  useEffect(() => {
+    if (habitToDelete) return; // The inner ConfirmDialog owns Escape while open.
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [habitToDelete, onClose]);
 
   const handleRestore = async (habitId: string) => {
     try {
