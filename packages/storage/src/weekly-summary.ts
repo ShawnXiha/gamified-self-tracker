@@ -18,7 +18,9 @@ export interface WeeklySummary {
  *                         past 7 logical days (the caller filters by date)
  * @param allCheckIns      every check-in across ALL habits, including
  *                         archived-habit history
- * @param longestStreak    longest streak across all (active) habits
+ * @param longestStreak    longest streak across all habits — streak rows are
+ *                         never deleted on archive, so the caller decides
+ *                         which streaks to include
  * @param freezesRemaining freeze tokens left in the player's account
  */
 export function buildWeeklySummary(
@@ -31,7 +33,9 @@ export function buildWeeklySummary(
   // Total possible check-ins for active habits in the past 7 days.
   const totalHabits = activeHabits.length * 7;
 
-  // Completed check-ins for active habits in the past 7 days.
+  // Completed check-ins for active habits in the past 7 days. Relies on the
+  // compound unique index [habit_id+logical_date]: at most one row per habit
+  // per day, so length == number of uniquely completed slots.
   const completedHabits = past7CheckIns.length;
 
   // Consistency rate with divide-by-zero protection.

@@ -38,9 +38,9 @@ export const useWeeklySummary = () => {
     if (!todayIsMonday || isDismissed || !habits || habits.length === 0) return null;
 
     const past7Days = getPast7LogicalDays(date);
-    const activeHabits = habits.filter(h => !h.archived_at);
 
-    const habitIds = activeHabits.map(h => h.id);
+    // useHabits() already excludes archived habits, so every habit here is active.
+    const habitIds = habits.map(h => h.id);
     const past7CheckIns = await db.checkIns
       .where('habit_id').anyOf(habitIds)
       .and(c => past7Days.includes(c.logical_date))
@@ -59,7 +59,7 @@ export const useWeeklySummary = () => {
     const allCheckIns = await db.checkIns.toArray();
 
     return buildWeeklySummary(
-      activeHabits,
+      habits,
       past7CheckIns,
       allCheckIns,
       longestStreak,

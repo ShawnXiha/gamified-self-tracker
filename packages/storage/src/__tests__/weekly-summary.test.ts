@@ -55,6 +55,23 @@ describe('buildWeeklySummary (pure)', () => {
     expect(summary.consistencyRate).toBe(0);
   });
 
+  it('returns zero consistency when active habits exist but no past-7-day check-ins', () => {
+    const activeHabits = [habit('h1'), habit('h2')];
+
+    const summary = buildWeeklySummary(activeHabits, [], [], 0, 0);
+
+    // totalHabits > 0 branch: rate must still be 0, not NaN or Infinity.
+    expect(summary.totalHabits).toBe(14);
+    expect(summary.completedHabits).toBe(0);
+    expect(summary.consistencyRate).toBe(0);
+  });
+
+  it('counts no lifetime days when there are no check-ins at all', () => {
+    const summary = buildWeeklySummary([habit('h1')], [], [], 0, 0);
+
+    expect(summary.totalLifetimeDays).toBe(0);
+  });
+
   it('counts unique logical dates across all check-ins (dedup)', () => {
     const allCheckIns = [
       checkIn('a', 'h1', '2026-04-13'),
