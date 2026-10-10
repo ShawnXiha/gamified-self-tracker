@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useHabits, useArchivedHabits, runNightlyEvaluation } from 'storage';
+import { useHabits, useArchivedHabits, runNightlyEvaluation, exportBackup } from 'storage';
 import { HabitList } from './components/HabitList';
 import { CreateHabitForm } from './components/CreateHabitForm';
 import { WeeklySummaryModal } from './components/WeeklySummaryModal';
 import { GamificationHeader } from './components/GamificationHeader';
 import { ArchivedHabitsModal } from './components/ArchivedHabitsModal';
 import { trackEvent, isPwaInstalled, getDeviceType } from './lib/analytics';
+import { downloadBackup } from './lib/download';
 
 export const App: React.FC = () => {
   const habits = useHabits();
@@ -42,6 +43,15 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  const handleExportBackup = async () => {
+    try {
+      const payload = await exportBackup();
+      downloadBackup(payload);
+    } catch (error) {
+      console.error('Failed to export backup:', error);
+    }
+  };
+
   if (!isBooted) {
     return <div className="flex h-screen items-center justify-center text-gray-500 font-medium">Loading tracker...</div>;
   }
@@ -55,13 +65,20 @@ export const App: React.FC = () => {
       <div className="mt-8">
         <HabitList habits={habits} />
       </div>
-      <div className="mt-6 flex justify-center">
+      <div className="mt-6 flex items-center justify-center gap-6">
         <button
           type="button"
           onClick={() => setShowArchived(true)}
           className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
         >
           Archived ({archivedHabits.length})
+        </button>
+        <button
+          type="button"
+          onClick={handleExportBackup}
+          className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
+        >
+          Export backup
         </button>
       </div>
       {showArchived && <ArchivedHabitsModal onClose={() => setShowArchived(false)} />}
