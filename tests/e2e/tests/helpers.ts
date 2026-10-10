@@ -2,8 +2,9 @@ import { Page, expect } from '@playwright/test';
 
 /**
  * Resets the app to a pristine state — equivalent to a very first visit:
- * IndexedDB is wiped and the page is reloaded so the app re-boots with fresh
- * user stats (the nightly evaluator re-initializes from scratch).
+ * IndexedDB and localStorage are wiped and the page is reloaded so the app
+ * re-boots with fresh user stats (the nightly evaluator re-initializes from
+ * scratch) and no dismissed state (e.g. the weekly-summary modal shows again).
  *
  * Why the dance with aborted scripts? The app keeps an open Dexie connection
  * to `GamifiedTrackerDB` for the whole page lifetime, and
@@ -22,13 +23,14 @@ export async function resetApp(page: Page): Promise<void> {
   );
   await page.goto('/');
 
-  await page.evaluate(() =>
-    new Promise<void>((resolve, reject) => {
+  await page.evaluate(() => {
+    localStorage.clear();
+    return new Promise<void>((resolve, reject) => {
       const request = indexedDB.deleteDatabase('GamifiedTrackerDB');
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
-    }),
-  );
+    });
+  });
 
   await page.unroute('**/*');
   await page.reload(); // Clean boot: nightly evaluator re-initializes userStats.
@@ -42,9 +44,16 @@ export async function resetApp(page: Page): Promise<void> {
  * modal eligible to appear).
  */
 export async function dismissWeeklySummaryIfVisible(page: Page): Promise<void> {
-  // The app decides via isMonday(getLogicalDate(new Date())) — same local
-  // weekday as this check, so skipping the wait on non-Mondays is sound.
-  if (new Date().getDay() !== 1) {
+  // The app decides via isMonday(getLogicalDate(new Date())), and
+  // getLogicalDate maps 00:00–03:59 local to the PREVIOUS calendar day — so
+  // between Tuesday 00:00 and 03:59 the logical day is still Monday and the
+  // app shows the modal. Mirror the engine's 4am shift before the weekday
+  // check, otherwise the modal would overlay the page untested.
+  const logical = new Date();
+  if (logical.getHours() < 4) {
+    logical.setDate(logical.getDate() - 1);
+  }
+  if (logical.getDay() !== 1) {
     return;
   }
 
