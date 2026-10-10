@@ -205,3 +205,94 @@ describe('freezeEvents Table', () => {
     });
   });
 });
+
+describe('v2 → v3 upgrade preserves existing data', () => {
+  it('keeps v2 rows intact and creates an empty freezeEvents table at verno 3', async () => {
+    // Reset to a clean slate. Unlike the other describes, we cannot
+    // db.delete()/db.open() in beforeEach: opening the singleton at v3 first
+    // would make the simulated old v2 client unable to open (VersionError).
+    // Order matters here: delete → seed via a v2-only client → reopen at v3.
+    await db.delete();
+
+    // Simulate an old client that only knows schema v2 (exact v2 stores
+    // strings copied from db.ts) and seed one row per table.
+    const oldDb = new Dexie('GamifiedTrackerDB');
+    oldDb.version(2).stores({
+      habits: 'id, title, created_at, archived_at',
+      checkIns: 'id, &[habit_id+logical_date], habit_id, logical_date, completed_at',
+      streaks: 'habit_id, current_streak, longest_streak, last_check_in_date',
+      userStats: 'id, total_xp, current_level, freezes_available'
+    });
+    await oldDb.open();
+    await oldDb.table('habits').add({
+      id: 'habit-1',
+      title: 'Drink Water',
+      created_at: 1000,
+      archived_at: null
+    });
+    await oldDb.table('checkIns').add({
+      id: 'checkin-1',
+      habit_id: 'habit-1',
+      logical_date: '2026-04-18',
+      completed_at: 1000,
+      awarded_xp: 14,
+      streak_at_time: 3
+    });
+    await oldDb.table('streaks').add({
+      habit_id: 'habit-1',
+      current_streak: 5,
+      longest_streak: 10,
+      last_check_in_date: '2026-04-17'
+    });
+    await oldDb.table('userStats').add({
+      id: 'user-1',
+      total_xp: 42,
+      current_level: 3,
+      freezes_available: 2
+    });
+    oldDb.close();
+
+    // Reopen through the real v3 singleton: must upgrade in place, not wipe.
+    await db.open();
+
+    expect(db.verno).toBe(3);
+
+    const habit = await db.habits.get('habit-1');
+    expect(habit).toEqual({
+      id: 'habit-1',
+      title: 'Drink Water',
+      created_at: 1000,
+      archived_at: null
+    });
+
+    const checkIn = await db.checkIns.get('checkin-1');
+    expect(checkIn).toEqual({
+      id: 'checkin-1',
+      habit_id: 'habit-1',
+      logical_date: '2026-04-18',
+      completed_at: 1000,
+      awarded_xp: 14,
+      streak_at_time: 3
+    });
+
+    const streak = await db.streaks.get('habit-1');
+    expect(streak).toEqual({
+      habit_id: 'habit-1',
+      current_streak: 5,
+      longest_streak: 10,
+      last_check_in_date: '2026-04-17'
+    });
+
+    const stats = await db.userStats.get('user-1');
+    expect(stats).toEqual({
+      id: 'user-1',
+      total_xp: 42,
+      current_level: 3,
+      freezes_available: 2
+    });
+
+    // freezeEvents is auto-created by the upgrade, empty and queryable.
+    expect(db.tables.map(t => t.name)).toContain('freezeEvents');
+    expect(await db.freezeEvents.count()).toBe(0);
+  });
+});
