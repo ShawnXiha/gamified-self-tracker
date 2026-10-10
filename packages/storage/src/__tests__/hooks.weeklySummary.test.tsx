@@ -15,6 +15,8 @@ const WeeklySummaryTest = () => {
   return (
     <div>
       <div data-testid="completed-habits">{summary.completedHabits}</div>
+      <div data-testid="consistency-rate">{summary.consistencyRate}</div>
+      <div data-testid="lifetime-days">{summary.totalLifetimeDays}</div>
       <div data-testid="longest-streak">{summary.longestStreak}</div>
       <div data-testid="freezes-remaining">{summary.freezesRemaining}</div>
       <button onClick={dismiss}>Dismiss</button>
@@ -85,6 +87,10 @@ describe('useWeeklySummary', () => {
     await waitFor(() => {
       expect(screen.getByTestId('completed-habits').textContent).toBe('2');
     });
+    // 1 active habit * 7 days = 7 total; 2 check-ins → 2/7 consistency rate
+    expect(screen.getByTestId('consistency-rate').textContent).toBe(String(2 / 7));
+    // 2 unique check-in dates across all habits
+    expect(screen.getByTestId('lifetime-days').textContent).toBe('2');
     expect(screen.getByTestId('longest-streak').textContent).toBe('12');
     expect(screen.getByTestId('freezes-remaining').textContent).toBe('3');
   });

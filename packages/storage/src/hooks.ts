@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { db } from './db';
 import type { Habit, DailyCheckIn, StreakState, UserStats } from './db';
 import { getLogicalDate, isMonday, getPast7LogicalDays } from 'domain/src/date-engine';
+import { buildWeeklySummary } from './weekly-summary';
 
 export { toggleCheckIn } from './check-in-service';
 
@@ -38,42 +39,32 @@ export const useWeeklySummary = () => {
 
     const past7Days = getPast7LogicalDays(date);
     const activeHabits = habits.filter(h => !h.archived_at);
-    
-    // total possible checkins for active habits in past 7 days
-    const totalHabits = activeHabits.length * 7;
-    
-    // get checkins for active habits in past 7 days
-        const habitIds = activeHabits.map(h => h.id);
-        const checkIns = await db.checkIns
-          .where('habit_id').anyOf(habitIds)
-          .and(c => past7Days.includes(c.logical_date))
-          .toArray();
-          
-        const completedHabits = checkIns.length;
-        const consistencyRate = totalHabits > 0 ? completedHabits / totalHabits : 0;
 
-        const userStats = await db.userStats.get('current');
-        const freezesRemaining = userStats?.freezes_available || 0;
+    const habitIds = activeHabits.map(h => h.id);
+    const past7CheckIns = await db.checkIns
+      .where('habit_id').anyOf(habitIds)
+      .and(c => past7Days.includes(c.logical_date))
+      .toArray();
 
-        const allStreaks = await db.streaks.toArray();
-        let longestStreak = 0;
-        if (allStreaks.length > 0) {
-            longestStreak = Math.max(...allStreaks.map(s => s.longest_streak));
-        }
+    const userStats = await db.userStats.get('current');
+    const freezesRemaining = userStats?.freezes_available || 0;
 
-        // Count unique logical_dates across all checkins for lifetime days
-        const allCheckIns = await db.checkIns.toArray();
-        const uniqueDays = new Set(allCheckIns.map(c => c.logical_date));
-        const totalLifetimeDays = uniqueDays.size;
+    const allStreaks = await db.streaks.toArray();
+    let longestStreak = 0;
+    if (allStreaks.length > 0) {
+      longestStreak = Math.max(...allStreaks.map(s => s.longest_streak));
+    }
 
-        return {
-          completedHabits,
-          totalHabits,
-          consistencyRate,
-          longestStreak,
-          freezesRemaining,
-          totalLifetimeDays
-        };
+    // All check-ins (incl. archived habit history) for lifetime days.
+    const allCheckIns = await db.checkIns.toArray();
+
+    return buildWeeklySummary(
+      activeHabits,
+      past7CheckIns,
+      allCheckIns,
+      longestStreak,
+      freezesRemaining,
+    );
   }, [date, todayIsMonday, isDismissed, habits]);
 
   const dismiss = () => {
