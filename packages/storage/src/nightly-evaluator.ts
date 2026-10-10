@@ -1,15 +1,8 @@
 import { db } from './db';
-import { getLogicalDate, calculateDayGap, parseYYYYMMDDToUTCms } from 'domain/src/date-engine';
+import { getLogicalDate, calculateDayGap, addDaysToLogicalDate } from 'domain/src/date-engine';
 import { evaluateLogicalDay } from 'domain/src/streak-engine';
 import type { LogicalDayInput } from 'domain/src/streak-engine';
 import { recomputeCachesForHabit, recomputeUserStatsCache } from './check-in-service';
-
-function addDaysToLogicalDate(dateStr: string, days: number): string {
-  const ms = parseYYYYMMDDToUTCms(dateStr);
-  const date = new Date(ms);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().split('T')[0];
-}
 
 /**
  * Evaluates every past logical day that has not been evaluated yet and

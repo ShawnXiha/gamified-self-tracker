@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { getLogicalDate, isToday, isMonday, getPast7LogicalDays } from '../date-engine';
+import {
+  getLogicalDate,
+  isToday,
+  isMonday,
+  getPast7LogicalDays,
+  addDaysToLogicalDate,
+} from '../date-engine';
 
 describe('Date Engine', () => {
   describe('getLogicalDate', () => {
@@ -77,6 +83,22 @@ describe('Date Engine', () => {
       expect(days.length).toBe(7);
       expect(days[0]).toBe('2026-04-13'); // start (Monday of previous week)
       expect(days[6]).toBe('2026-04-19'); // end (Sunday just passed)
+    });
+  });
+
+  describe('addDaysToLogicalDate', () => {
+    it('adds whole days to a logical date', () => {
+      expect(addDaysToLogicalDate('2026-04-18', 1)).toBe('2026-04-19');
+      expect(addDaysToLogicalDate('2026-04-18', 0)).toBe('2026-04-18');
+    });
+
+    it('rolls over month and year boundaries in UTC', () => {
+      expect(addDaysToLogicalDate('2026-03-31', 1)).toBe('2026-04-01');
+      expect(addDaysToLogicalDate('2026-12-31', 1)).toBe('2027-01-01');
+    });
+
+    it('supports negative offsets', () => {
+      expect(addDaysToLogicalDate('2026-04-01', -1)).toBe('2026-03-31');
     });
   });
 });

@@ -52,6 +52,18 @@ export function calculateDayGap(date1: string, date2: string): number {
   return Math.floor((ms2 - ms1) / msPerDay);
 }
 
+/**
+ * Returns the logical date `days` days after (or before, for negative values)
+ * the given logical date. Arithmetic runs in UTC, so month and year rollovers
+ * are independent of the machine's timezone.
+ */
+export function addDaysToLogicalDate(dateStr: string, days: number): string {
+  const ms = parseYYYYMMDDToUTCms(dateStr);
+  const date = new Date(ms);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
 export function isMonday(logicalDate: string): boolean {
   const parts = logicalDate.split('-');
   if (parts.length !== 3) throw new Error('Invalid date format; expected YYYY-MM-DD');
