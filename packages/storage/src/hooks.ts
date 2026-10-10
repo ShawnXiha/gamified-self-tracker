@@ -95,6 +95,13 @@ export const useHabits = () => {
   ) || [];
 };
 
+export const useArchivedHabits = (): Habit[] => {
+  return useLiveQuery(
+    () => db.habits.filter(h => h.archived_at !== null).toArray(),
+    []
+  ) || [];
+};
+
 export const addHabit = async (title: string) => {
   const id = crypto.randomUUID();
   await db.habits.add({
