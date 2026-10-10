@@ -1,23 +1,13 @@
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
-import { getDeviceType, getTimeOfDay, initAnalytics, isPwaInstalled, trackEvent } from '../index';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getDeviceType, getTimeOfDay, initAnalytics, isPwaInstalled, reportError, trackEvent } from '../index';
 
-const CONFIG_KEYS = ['VITE_POSTHOG_KEY', 'VITE_POSTHOG_HOST', 'VITE_SENTRY_DSN', 'VITE_APP_VERSION'];
-
+/**
+ * Behavioral tests against the real module (no mocks): the no-provider path,
+ * dev-mode console logging (vitest bakes import.meta.env.DEV=true into the
+ * real config module), and the pure helpers. Keyed init paths live in
+ * analytics-init.test.ts, where env access is mocked for per-test control.
+ */
 describe('initAnalytics (no provider env vars)', () => {
-  beforeEach(() => {
-    // Guarantee the no-provider path regardless of the shell's environment:
-    // vi.stubEnv clears the import.meta.env backing object; process.env is
-    // cleared for the implementation's node fallback.
-    for (const key of CONFIG_KEYS) {
-      vi.stubEnv(key, '');
-      delete process.env[key];
-    }
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it('initializes nothing, warns exactly once, and trackEvent is a safe no-op', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -59,6 +49,12 @@ describe('trackEvent (dev mode)', () => {
   });
 });
 
+describe('reportError', () => {
+  it('resolves without throwing against an uninitialized Sentry', async () => {
+    await expect(reportError(new Error('boom'), { componentStack: 'at x' })).resolves.toBeUndefined();
+  });
+});
+
 describe('getTimeOfDay', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -80,40 +76,35 @@ describe('getTimeOfDay', () => {
   });
 });
 
+function stubMatchMedia(value: unknown): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  Object.defineProperty(window, 'matchMedia', { value, configurable: true, writable: true });
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(window, 'matchMedia', descriptor);
+    } else {
+      delete (window as unknown as Record<string, unknown>).matchMedia;
+    }
+  };
+}
+
 describe('isPwaInstalled', () => {
   it('returns false without throwing when matchMedia is unavailable (jsdom)', () => {
-    // jsdom does not implement window.matchMedia; the guard must handle it.
-    Object.defineProperty(window, 'matchMedia', {
-      value: undefined,
-      configurable: true,
-      writable: true,
-    });
+    const restore = stubMatchMedia(undefined);
     try {
       expect(() => isPwaInstalled()).not.toThrow();
       expect(isPwaInstalled()).toBe(false);
     } finally {
-      Object.defineProperty(window, 'matchMedia', {
-        value: undefined,
-        configurable: true,
-        writable: true,
-      });
+      restore();
     }
   });
 
   it('returns true when matchMedia reports a standalone display mode', () => {
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      writable: true,
-      value: vi.fn().mockReturnValue({ matches: true }),
-    });
+    const restore = stubMatchMedia(vi.fn().mockReturnValue({ matches: true }));
     try {
       expect(isPwaInstalled()).toBe(true);
     } finally {
-      Object.defineProperty(window, 'matchMedia', {
-        value: undefined,
-        configurable: true,
-        writable: true,
-      });
+      restore();
     }
   });
 });

@@ -1,0 +1,30 @@
+{
+  // Based on packages/domain/tsconfig.json, with two adjustments for this
+  // package's actual consumption:
+  //  - "types": ["vite/client"] so `import.meta.env` (used here and required
+  //    by the vitest config) type-checks.
+  //  - "module": "esnext" + "moduleResolution": "bundler" (the vite-style
+  //    layout these sources run under) so `type: commonjs` + extensionless
+  //    relative imports don't trip verbatimModuleSyntax/nodenext checks.
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "types": ["vite/client"],
+
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  }
+}

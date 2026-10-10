@@ -6,9 +6,9 @@ import { initAnalytics } from 'analytics';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
-// Fire-and-forget: lazy-loads PostHog/Sentry only when the matching VITE_*
-// env vars are present, without blocking first render.
-void initAnalytics();
+// Fire-and-forget: lazily loads and initializes PostHog and Sentry only when
+// the matching VITE_* env vars are present, without blocking first render.
+void initAnalytics().catch((e) => console.warn('[Analytics] init failed', e));
 
 const updateSW = registerSW({
   onNeedRefresh() {

@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { captureException } from 'analytics';
+import { reportError } from 'analytics';
 
 interface Props { children: ReactNode; }
 interface State { hasError: boolean; }
@@ -13,11 +13,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
-    try {
-      captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
-    } catch (e) {
-      // Sentry might not be initialized if env vars are missing
-    }
+    // reportError never throws and is a no-op when Sentry is not initialized.
+    void reportError(error, { componentStack: errorInfo.componentStack });
   }
 
   public render() {

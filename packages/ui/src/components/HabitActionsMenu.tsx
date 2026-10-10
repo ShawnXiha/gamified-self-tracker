@@ -44,6 +44,7 @@ export const HabitActionsMenu: React.FC<HabitActionsMenuProps> = ({ habitId, hab
     setShowDeleteConfirm(false);
     try {
       await deleteHabit(habitId);
+      trackEvent({ name: 'habit_deleted', properties: { habit_id: habitId } });
     } catch (error) {
       console.error('Failed to delete habit:', error);
     }
