@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { db } from '../db';
 import { toggleCheckIn } from '../hooks';
+import { recomputeCachesForHabit, recomputeUserStatsCache } from '../check-in-service';
 import { calculateXP, calculateLevel } from 'domain/src/scoring-engine';
 
 const TODAY = '2026-04-17';
@@ -228,5 +229,120 @@ describe('toggleCheckIn (derived XP and streak caches)', () => {
     expect(result.action).toBe('added');
     expect(result.xp).toBe(14);
     expect(result.leveled_up).toBe(false);
+  });
+});
+
+describe('toggleCheckIn (freeze-consumed wiring)', () => {
+  beforeEach(async () => {
+    await db.delete();
+    await db.open();
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('subtracts the consumed freeze and treats the protected day as neither break nor count', async () => {
+    const habitId = 'habit-test-freeze';
+    vi.setSystemTime(new Date('2026-04-17T10:00:00.000Z'));
+    await seedHabit(habitId);
+
+    await db.checkIns.add({
+      id: 'c1',
+      habit_id: habitId,
+      logical_date: '2026-04-15',
+      completed_at: new Date('2026-04-15T12:00:00.000Z').getTime(),
+      awarded_xp: 10,
+      streak_at_time: 1
+    });
+    await db.freezeEvents.add({
+      id: 'f1',
+      type: 'consumed',
+      logical_date: '2026-04-16',
+      created_at: new Date('2026-04-17T05:00:00.000Z').getTime()
+    });
+
+    await recomputeCachesForHabit(habitId);
+    await recomputeUserStatsCache();
+
+    // 2026-04-16 is protected: it neither breaks the run (04-15 still counts)
+    // nor extends it.
+    const streak = await db.streaks.get(habitId);
+    expect(streak?.current_streak).toBe(1);
+    expect(streak?.last_check_in_date).toBe('2026-04-15');
+
+    // freezes_available = 2 + (level 1 − 1) + 0 milestones − 1 consumed = 1
+    const stats = await db.userStats.get('current');
+    expect(stats?.total_xp).toBe(10);
+    expect(stats?.current_level).toBe(1);
+    expect(stats?.freezes_available).toBe(1);
+  });
+
+  it('awards XP from the protected run when checking in today', async () => {
+    const habitId = 'habit-test-freeze-toggle';
+    vi.setSystemTime(new Date('2026-04-17T10:00:00.000Z'));
+    await seedHabit(habitId);
+
+    await db.checkIns.add({
+      id: 'c1',
+      habit_id: habitId,
+      logical_date: '2026-04-15',
+      completed_at: new Date('2026-04-15T12:00:00.000Z').getTime(),
+      awarded_xp: 10,
+      streak_at_time: 1
+    });
+    await db.freezeEvents.add({
+      id: 'f1',
+      type: 'consumed',
+      logical_date: '2026-04-16',
+      created_at: new Date('2026-04-17T05:00:00.000Z').getTime()
+    });
+
+    // Streak before insert: 04-17 in progress (skip), 04-16 frozen (skip),
+    // 04-15 → 1. The freeze protected the run without counting toward it.
+    const result = await toggleCheckIn(habitId);
+    expect(result).toEqual({ action: 'added', xp: calculateXP(1), leveled_up: false });
+
+    const inserted = await db.checkIns
+      .where({ habit_id: habitId, logical_date: '2026-04-17' })
+      .first();
+    expect(inserted?.streak_at_time).toBe(1);
+    expect(inserted?.awarded_xp).toBe(12);
+
+    // The consumed freeze stays deducted even though today's check-in carried
+    // the run through the protected day — the ledger is never touched by toggles.
+    const stats = await db.userStats.get('current');
+    expect(stats?.total_xp).toBe(22); // 10 + 12
+    expect(stats?.current_level).toBe(1);
+    expect(stats?.freezes_available).toBe(1); // 2 + 0 + 0 − 1
+
+    const streak = await db.streaks.get(habitId);
+    expect(streak?.current_streak).toBe(2); // 04-15 + 04-17 with 04-16 protected
+    expect(streak?.last_check_in_date).toBe('2026-04-17');
+  });
+});
+
+describe('check-in service contracts', () => {
+  beforeEach(async () => {
+    await db.delete();
+    await db.open();
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('throws when toggling a habit that does not exist', async () => {
+    vi.setSystemTime(new Date('2026-04-17T10:00:00.000Z'));
+    await expect(toggleCheckIn('nonexistent-habit')).rejects.toThrow('Habit not found');
+  });
+
+  it('recomputeCachesForHabit silently no-ops for an unknown habit', async () => {
+    await expect(recomputeCachesForHabit('nonexistent-habit')).resolves.toBeUndefined();
+    expect(await db.streaks.count()).toBe(0);
   });
 });

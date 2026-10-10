@@ -51,17 +51,20 @@ describe('toggleCheckIn (Race Condition Prevention)', () => {
     await seedCheckIns(habitId);
 
     // Trigger two toggles simultaneously. Dexie serializes read-write
-    // transactions over the shared tables, so exactly one of them wins: the
-    // second either sees the first's row (and removes it) or hits the unique
-    // [habit_id+logical_date] index and aborts with a ConstraintError.
+    // transactions over the overlapping stores, so the second toggle reliably
+    // runs after the first commits: it sees today's check-in row and takes the
+    // `removed` path. The unique [habit_id+logical_date] index only backs up
+    // against non-transactional / out-of-band writes — it is NOT an expected
+    // concurrent outcome here.
     const p1 = toggleCheckIn(habitId);
     const p2 = toggleCheckIn(habitId);
 
     try {
       await Promise.all([p1, p2]);
     } catch (e) {
-      // A ConstraintError on the unique index of the second insert is the
-      // accepted resolution; anything else would be a real bug.
+      // Defensive only: under Dexie serialization this should never fire. If a
+      // non-transactional writer ever ran, only a ConstraintError from the
+      // unique index would be acceptable.
       expect((e as Error).name).toBe('ConstraintError');
     }
 
@@ -75,7 +78,9 @@ describe('toggleCheckIn (Race Condition Prevention)', () => {
     const streak = await db.streaks.get(habitId);
 
     if (todayCheckIns.length === 1) {
-      // XP awarded exactly once, from the derived streak of 2.
+      // Backstop path (should not occur with serialized transactions): one add
+      // won outright. XP must still have been awarded exactly once, from the
+      // derived streak of 2.
       expect(todayCheckIns[0]?.awarded_xp).toBe(14);
       expect(todayCheckIns[0]?.streak_at_time).toBe(2);
 
@@ -83,8 +88,8 @@ describe('toggleCheckIn (Race Condition Prevention)', () => {
       expect(streak?.current_streak).toBe(3);
       expect(streak?.last_check_in_date).toBe(TODAY);
     } else {
-      // The second toggle saw the first's row and removed it: honest revert,
-      // all caches reflect the actual remaining check-ins.
+      // Expected path: the second toggle saw the first's row and removed it —
+      // honest revert, all caches reflect the actual remaining check-ins.
       expect(userStats?.total_xp).toBe(20); // 10 + 10
       expect(streak?.current_streak).toBe(2);
       expect(streak?.last_check_in_date).toBe('2026-04-16');
