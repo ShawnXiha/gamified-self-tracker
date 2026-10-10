@@ -27,13 +27,13 @@ async function seedHabit(habitId: string, archivedAt: number | null = null): Pro
   });
 }
 
-async function seedCheckIn(habitId: string, logicalDate: string): Promise<void> {
+async function seedCheckIn(habitId: string, logicalDate: string, awardedXp = XP_PER_CHECK_IN): Promise<void> {
   await db.checkIns.add({
     id: `${habitId}-${logicalDate}`,
     habit_id: habitId,
     logical_date: logicalDate,
     completed_at: Date.parse(`${logicalDate}T12:00:00.000Z`),
-    awarded_xp: XP_PER_CHECK_IN,
+    awarded_xp: awardedXp,
     streak_at_time: 0,
   });
 }
@@ -134,6 +134,56 @@ describe('nightly evaluator (freeze ledger decisions)', () => {
     expect(streak?.current_streak).toBe(0);
     expect(streak?.longest_streak).toBe(3);
     expect(streak?.last_check_in_date).toBe('2026-04-16');
+  });
+
+  it('spends a later missed day when an earlier freeze bridges a 7-day milestone', async () => {
+    const habitId = 'h1';
+
+    // Today is 2026-03-19. The habit checked in 03-01..03-06, missed 03-07,
+    // checked in 03-08..03-13, missed 03-14, checked in 03-15..03-17 and
+    // missed 03-18. XP is 1 per check-in (15 total, still level 1) so the
+    // derived availability starts at 2 + 0 milestones − 0 consumed = 2.
+    vi.setSystemTime(new Date('2026-03-19T12:00:00.000Z'));
+    await db.habits.add({
+      id: habitId,
+      title: `Habit ${habitId}`,
+      created_at: new Date('2026-02-01T00:00:00.000Z').getTime(),
+      archived_at: null,
+    });
+    for (const day of ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06']) {
+      await seedCheckIn(habitId, day, 1);
+    }
+    for (const day of ['2026-03-08', '2026-03-09', '2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13']) {
+      await seedCheckIn(habitId, day, 1);
+    }
+    for (const day of ['2026-03-15', '2026-03-16', '2026-03-17']) {
+      await seedCheckIn(habitId, day, 1);
+    }
+    await seedUserStats('2026-03-06');
+
+    await runNightlyEvaluation();
+
+    // Spending the 03-07 freeze carries the run across the missed day, so
+    // 03-08 closes a 7-day run and 03-16 closes a 14-day run → two milestone
+    // awards RAISE the derived availability: 2 → 3 after 03-07, → 2 after
+    // 03-14, → 1 after 03-18. That bump is what makes 03-18 spendable: every
+    // day checks the derived value AFTER earlier appends. A naive running
+    // count of 2 would stop after 03-14, leaving 03-18 unprotected → streak 0
+    // while a freeze remains (permanent: the ledger is append-only).
+    const dates = (await db.freezeEvents.orderBy('logical_date').toArray()).map(e => e.logical_date);
+    expect(dates).toEqual(['2026-03-07', '2026-03-14', '2026-03-18']);
+
+    const stats = await db.userStats.get('current');
+    expect(stats?.total_xp).toBe(15);
+    expect(stats?.current_level).toBe(1);
+    expect(stats?.freezes_available).toBe(1); // 2 + 2 milestones − 3 consumed
+    expect(stats?.last_evaluated_date).toBe('2026-03-19');
+
+    // All three missed days are protected: the run is the full 15 check-ins.
+    const streak = await db.streaks.get(habitId);
+    expect(streak?.current_streak).toBe(15);
+    expect(streak?.longest_streak).toBe(15);
+    expect(streak?.last_check_in_date).toBe('2026-03-17');
   });
 
   it('keeps the streak of a partially completed day and consumes no freeze', async () => {
@@ -267,6 +317,30 @@ describe('nightly evaluator (freeze ledger decisions)', () => {
     // A second boot on the same day stays a no-op.
     await runNightlyEvaluation();
     expect((await db.userStats.get('current'))?.last_evaluated_date).toBe('2026-04-18');
+  });
+
+  it('survives concurrent first-boot calls (StrictMode double-boot)', async () => {
+    vi.setSystemTime(new Date('2026-04-18T12:00:00.000Z'));
+
+    // React StrictMode double-fires effects on a fresh database; both calls
+    // must settle fulfilled and produce exactly one, identical userStats row.
+    const results = await Promise.allSettled([
+      runNightlyEvaluation(),
+      runNightlyEvaluation(),
+    ]);
+    expect(results[0].status).toBe('fulfilled');
+    expect(results[1].status).toBe('fulfilled');
+
+    const rows = await db.userStats.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({
+      id: 'current',
+      total_xp: 0,
+      current_level: 1,
+      freezes_available: 2,
+      last_evaluated_date: '2026-04-18',
+    });
+    expect(await db.freezeEvents.count()).toBe(0);
   });
 
   it('backfills a missing checkpoint without retro-evaluating unknown history', async () => {

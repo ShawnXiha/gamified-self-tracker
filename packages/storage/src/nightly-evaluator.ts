@@ -20,6 +20,14 @@ function addDaysToLogicalDate(dateStr: string, days: number): string {
  * nothing is written and the derived streak scan naturally treats the day as
  * a break.
  *
+ * Availability is always the *derived* value, re-read from the source of
+ * truth before the first day and after every append: consuming a freeze can
+ * itself raise availability (a protected day bridges a missed day in the
+ * streak scan, and a bridge crossing a 7-day boundary awards a milestone that
+ * adds a freeze), so a local running count would under-spend. Days are
+ * evaluated chronologically — an earlier day's append is visible to every
+ * later day, and earlier decisions are never retroactively changed.
+ *
  * Streaks, XP, level and freeze counts are never written directly — after the
  * per-day loop every habit's streak cache and the user stats cache are rebuilt
  * from the sources of truth (`checkIns` + `freezeEvents` + habit creation
@@ -41,8 +49,11 @@ export async function runNightlyEvaluation(): Promise<void> {
   const stats = await db.userStats.get('current');
   if (!stats) {
     // Brand-new user (or a database from before userStats existed): establish
-    // the save point without evaluating anything.
-    await db.userStats.add({
+    // the save point without evaluating anything. `put` (upsert) instead of
+    // `add` so two concurrent first-boot calls (React StrictMode double-fires
+    // effects on a fresh DB) both settle: they write identical rows, so the
+    // second upsert is idempotent instead of rejecting on a duplicate key.
+    await db.userStats.put({
       id: 'current',
       total_xp: 0,
       current_level: 1,
@@ -70,12 +81,14 @@ export async function runNightlyEvaluation(): Promise<void> {
       const checkpoint = currentStats?.last_evaluated_date;
       if (!checkpoint) return; // Deleted concurrently: nothing to evaluate.
 
-      // The availability check below must use the derived freeze count, not a
-      // possibly stale cache field: rebuild user stats from the source of
-      // truth first (this preserves the checkpoint), then keep a running
-      // local count as freezes are appended during this same run.
+      // The availability check must use the derived freeze count, not a local
+      // running total: appending a consumed freeze can RAISE derived
+      // availability (a protected day bridges a missed day in the streak
+      // scan, and a bridge crossing a 7-day boundary awards a milestone that
+      // itself adds a freeze). Rebuild user stats from the source of truth
+      // before the first day's decision — the checkpoint is preserved by the
+      // rebuild — and again after every append below.
       await recomputeUserStatsCache();
-      let freezesAvailable = (await db.userStats.get('current'))?.freezes_available ?? 0;
 
       const allHabits = await db.habits.toArray();
 
@@ -107,16 +120,23 @@ export async function runNightlyEvaluation(): Promise<void> {
 
         const outcome = evaluateLogicalDay(logicalDayInput);
 
-        if (outcome.kind === 'missed_all_scheduled' && freezesAvailable > 0) {
-          // Append-only ledger: the day is protected, and the running count
-          // drops so a later day in the same run cannot spend the same freeze.
-          await db.freezeEvents.add({
-            id: crypto.randomUUID(),
-            type: 'consumed',
-            logical_date: dateToEvaluate,
-            created_at: Date.now(),
-          });
-          freezesAvailable -= 1;
+        if (outcome.kind === 'missed_all_scheduled') {
+          // Ask the derived caches how many freezes are available right now.
+          // Days are processed chronologically, so a milestone bump caused by
+          // an earlier freeze in this same run is visible to every later day
+          // — without retroactively changing earlier decisions.
+          const derivedStats = await db.userStats.get('current');
+          if (derivedStats && derivedStats.freezes_available > 0) {
+            await db.freezeEvents.add({
+              id: crypto.randomUUID(),
+              type: 'consumed',
+              logical_date: dateToEvaluate,
+              created_at: Date.now(),
+            });
+            // The ledger grew: re-derive before the next day's decision so
+            // availability always reflects the ledger as it stands.
+            await recomputeUserStatsCache();
+          }
         }
         // streak_kept / no_scheduled_habits / out-of-freezes: no ledger row.
         // A break is not recorded — derivation handles it from the absence of
