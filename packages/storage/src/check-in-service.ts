@@ -177,3 +177,82 @@ export async function toggleCheckIn(
     },
   );
 }
+
+/**
+ * Renames a habit. The id is preserved and no historical check-in is touched:
+ * titles never feed the derived caches, so no cache rewrite is needed.
+ */
+export async function renameHabit(habitId: string, title: string): Promise<void> {
+  if (title.trim().length === 0) {
+    throw new Error('Title cannot be empty');
+  }
+
+  const habit = await db.habits.get(habitId);
+  if (!habit) throw new Error('Habit not found');
+
+  habit.title = title;
+  await db.habits.put(habit);
+}
+
+/**
+ * Archives a habit by stamping `archived_at`. Idempotent: a second call on an
+ * already-archived habit keeps the original timestamp. Archiving does not
+ * rewrite the derived caches (they depend on check-ins, habit creation dates,
+ * and the freeze ledger — never on `archived_at`).
+ */
+export async function archiveHabit(habitId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.habits, db.checkIns, db.streaks, db.userStats, db.freezeEvents],
+    async () => {
+      const habit = await db.habits.get(habitId);
+      if (!habit) throw new Error('Habit not found');
+      if (habit.archived_at !== null) return; // Already archived: keep the original stamp.
+
+      habit.archived_at = Date.now();
+      await db.habits.put(habit);
+    },
+  );
+}
+
+/**
+ * Restores an archived habit by clearing `archived_at`.
+ */
+export async function unarchiveHabit(habitId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.habits, db.checkIns, db.streaks, db.userStats, db.freezeEvents],
+    async () => {
+      const habit = await db.habits.get(habitId);
+      if (!habit) throw new Error('Habit not found');
+
+      habit.archived_at = null;
+      await db.habits.put(habit);
+    },
+  );
+}
+
+/**
+ * Permanently deletes a habit together with all rows that belong to it:
+ * the habit row, its check-ins, and its streak cache row. `userStats` is then
+ * re-derived inside the same transaction, so `total_xp` honestly falls back to
+ * the Σ of the remaining check-ins (a deletion is not a punitive deduction).
+ * The global `freezeEvents` ledger is deliberately left untouched — those are
+ * events of the whole account and are never retroactively removed.
+ */
+export async function deleteHabit(habitId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.habits, db.checkIns, db.streaks, db.userStats, db.freezeEvents],
+    async () => {
+      const habit = await db.habits.get(habitId);
+      if (!habit) throw new Error('Habit not found');
+
+      await db.habits.delete(habitId);
+      await db.checkIns.where('habit_id').equals(habitId).delete();
+      await db.streaks.delete(habitId);
+
+      await recomputeUserStatsCache();
+    },
+  );
+}
