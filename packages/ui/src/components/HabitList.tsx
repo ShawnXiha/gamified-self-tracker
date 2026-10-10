@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Habit } from 'domain';
+import type { Habit } from 'storage';
 import { DailyCheckInItem } from './DailyCheckInItem';
 
 export const HabitList: React.FC<{ habits: Habit[] }> = ({ habits }) => {
