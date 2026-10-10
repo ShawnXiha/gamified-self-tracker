@@ -26,7 +26,12 @@ test.describe('weekly summary modal', () => {
 
     const heading = page.getByRole('heading', { name: 'Weekly Summary' });
     await expect(heading).toBeVisible();
-    await expect(page.getByText(/Consistency Rate/)).toBeVisible();
+    // Fresh state: 1 active habit × the 7 slots in getPast7LogicalDays. That
+    // window is today-7..today-1 (it EXCLUDES today), so the plan's "2
+    // check-ins in the window" scenario is intentionally dropped — check-ins
+    // made today can never raise these numbers.
+    await expect(page.getByText('Habits Completed: 0 / 7')).toBeVisible();
+    await expect(page.getByText('Consistency Rate: 0%')).toBeVisible();
 
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(heading).toBeHidden();

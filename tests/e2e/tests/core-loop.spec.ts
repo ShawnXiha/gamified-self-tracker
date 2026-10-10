@@ -1,33 +1,26 @@
 import { test, expect } from '@playwright/test';
-import { resetApp, dismissWeeklySummaryIfVisible } from './helpers';
+import { resetApp, createHabit } from './helpers';
 
 const HABIT_TITLE = 'Read for 20 minutes';
 
 test.describe('core habit loop', () => {
   test.beforeEach(async ({ page }) => {
+    // resetApp guarantees zero habits, so no weekly-summary modal can exist
+    // here — no dismissal guard needed.
     await resetApp(page);
-    await dismissWeeklySummaryIfVisible(page);
   });
 
   test('starts empty, creates a habit, and shows it in the list', async ({ page }) => {
     await expect(page.getByText('No habits yet')).toBeVisible();
 
-    await page.getByPlaceholder('Enter new habit...').fill(HABIT_TITLE);
-    await page.getByRole('button', { name: 'Add' }).click();
-
-    // On Mondays the first habit makes the weekly-summary modal eligible to
-    // appear; dismiss it before touching the list.
-    await dismissWeeklySummaryIfVisible(page);
+    await createHabit(page, HABIT_TITLE);
 
     await expect(page.getByText(HABIT_TITLE)).toBeVisible();
     await expect(page.getByText('No habits yet')).toBeHidden();
   });
 
   test('checking in shows a +10 XP toast; unchecking removes it', async ({ page }) => {
-    await page.getByPlaceholder('Enter new habit...').fill(HABIT_TITLE);
-    await page.getByRole('button', { name: 'Add' }).click();
-    await dismissWeeklySummaryIfVisible(page);
-    await expect(page.getByText(HABIT_TITLE)).toBeVisible();
+    await createHabit(page, HABIT_TITLE);
 
     const checkbox = page.getByRole('checkbox', { name: 'Daily Check-In' });
     await expect(checkbox).not.toBeChecked();
@@ -49,9 +42,7 @@ test.describe('core habit loop', () => {
   });
 
   test('resetApp wipes IndexedDB so the next boot starts pristine', async ({ page }) => {
-    await page.getByPlaceholder('Enter new habit...').fill(HABIT_TITLE);
-    await page.getByRole('button', { name: 'Add' }).click();
-    await expect(page.getByText(HABIT_TITLE)).toBeVisible();
+    await createHabit(page, HABIT_TITLE);
 
     await resetApp(page);
 

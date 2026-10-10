@@ -15,7 +15,8 @@ jobs:
         with:
           # vite 8 requires ^20.19.0 || >=22.12.0
           node-version: 20
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - run: npm run build
       - run: npm run test
 
@@ -27,9 +28,27 @@ jobs:
         with:
           # vite 8 requires ^20.19.0 || >=22.12.0
           node-version: 20
-      - run: npm install
-      - run: npm run build
+          cache: npm
+      - run: npm ci
+      - name: Read the Playwright version for the browser cache key
+        id: playwright-version
+        run: echo "version=$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
+      # Browser binaries dominate the e2e job's install time; cache them keyed
+      # on the OS and exact Playwright version.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
       - run: npx playwright install --with-deps chromium
       # CI=true (set by GitHub Actions) makes playwright.config start a fresh
       # webServer instead of reusing one, and enables retries/forbidOnly.
+      # No build step: the webServer runs vite dev against the TS sources.
       - run: npm run test:e2e
+      # trace: 'on-first-retry' writes here; upload on success or failure,
+      # except when the run is cancelled.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-test-results
+          path: tests/e2e/test-results/
+          retention-days: 7

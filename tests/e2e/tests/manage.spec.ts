@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { resetApp, dismissWeeklySummaryIfVisible } from './helpers';
+import { resetApp, createHabit } from './helpers';
 
 /**
  * Habit management flows: rename, archive/restore, delete. Every habit row owns
@@ -8,22 +8,14 @@ import { resetApp, dismissWeeklySummaryIfVisible } from './helpers';
  * single accessible name.
  */
 
-async function createHabit(page: Page, title: string): Promise<void> {
-  await page.getByPlaceholder('Enter new habit...').fill(title);
-  await page.getByRole('button', { name: 'Add' }).click();
-  // The first habit makes the weekly-summary modal eligible on (logical)
-  // Mondays; it covers the page, so clear it before the next interaction.
-  await dismissWeeklySummaryIfVisible(page);
-  await expect(page.getByText(title, { exact: true })).toBeVisible();
-}
-
 const openActionsMenu = (page: Page, title: string) =>
   page.getByRole('button', { name: `Open actions for ${title}`, exact: true }).click();
 
 test.describe('habit management', () => {
   test.beforeEach(async ({ page }) => {
+    // resetApp guarantees zero habits, so no weekly-summary modal can exist
+    // here — no dismissal guard needed.
     await resetApp(page);
-    await dismissWeeklySummaryIfVisible(page);
   });
 
   test('renames a habit through the edit modal', async ({ page }) => {

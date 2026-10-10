@@ -1,25 +1,25 @@
 import fs from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
-import { resetApp, dismissWeeklySummaryIfVisible } from './helpers';
+import { resetApp, createHabit } from './helpers';
 
 interface BackupPayload {
   version: number;
   exported_at: string;
   habits: Array<{ title: string; archived_at: number | null }>;
+  checkIns: unknown[];
+  freezeEvents: unknown[];
 }
 
 test.describe('backup export', () => {
   test.beforeEach(async ({ page }) => {
+    // resetApp guarantees zero habits, so no weekly-summary modal can exist
+    // here — no dismissal guard needed.
     await resetApp(page);
-    await dismissWeeklySummaryIfVisible(page);
   });
 
   test('downloads a versioned JSON backup containing the created habit', async ({ page }) => {
     const title = 'Write journal';
-    await page.getByPlaceholder('Enter new habit...').fill(title);
-    await page.getByRole('button', { name: 'Add' }).click();
-    await dismissWeeklySummaryIfVisible(page);
-    await expect(page.getByText(title, { exact: true })).toBeVisible();
+    await createHabit(page, title);
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -28,10 +28,17 @@ test.describe('backup export', () => {
 
     expect(download.suggestedFilename()).toMatch(/^gamified-backup-\d{4}-\d{2}-\d{2}\.json$/);
 
-    const payload: BackupPayload = JSON.parse(await fs.readFile(await download.path(), 'utf8'));
+    const downloadPath = await download.path();
+    if (!downloadPath) {
+      throw new Error('Expected a local download path — is acceptDownloads enabled?');
+    }
+
+    const payload: BackupPayload = JSON.parse(await fs.readFile(downloadPath, 'utf8'));
 
     expect(payload.version).toBe(1);
     expect(Date.parse(payload.exported_at)).not.toBeNaN();
+    expect(Array.isArray(payload.checkIns)).toBe(true);
+    expect(Array.isArray(payload.freezeEvents)).toBe(true);
 
     const exported = payload.habits.filter(habit => habit.title === title);
     expect(exported).toHaveLength(1);
