@@ -65,6 +65,13 @@ describe('Storage Hooks', () => {
   it('can toggle a daily check-in', async () => {
     const habitId = 'test-habit-1';
     
+    await db.habits.add({
+      id: habitId,
+      title: 'Test Habit',
+      created_at: Date.now(),
+      archived_at: null
+    });
+    
     render(<CheckInTestComponent habitId={habitId} />);
     
     const status = screen.getByTestId('checkin-status');
@@ -101,6 +108,13 @@ describe('Storage Hooks', () => {
     // Set time to 3:00 AM on April 18, 2026 -> Logical Date 2026-04-17
     // Use local time instead of UTC to avoid timezone issues
     vi.setSystemTime(new Date(2026, 3, 18, 3, 0, 0));
+    
+    await db.habits.add({
+      id: habitId,
+      title: 'Test Habit',
+      created_at: Date.now(), // logical date 2026-04-17, before/equal the toggle date
+      archived_at: null
+    });
     
     render(<CheckInTestComponent habitId={habitId} />);
     
