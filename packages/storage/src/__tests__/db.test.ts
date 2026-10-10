@@ -147,3 +147,61 @@ describe('Database Schema', () => {
     expect(stats?.total_xp).toBe(42);
   });
 });
+
+describe('freezeEvents Table', () => {
+  beforeEach(async () => {
+    await db.delete(); // Reset DB before each test
+    await db.open();
+  });
+
+  it('should initialize with a freezeEvents table', () => {
+    const tableNames = db.tables.map(t => t.name);
+    expect(tableNames).toContain('freezeEvents');
+  });
+
+  it('can add and get a consumed freeze event', async () => {
+    const eventId = 'freeze-event-1';
+    await db.freezeEvents.add({
+      id: eventId,
+      type: 'consumed',
+      logical_date: '2026-04-18',
+      created_at: 1000
+    });
+
+    const event = await db.freezeEvents.get(eventId);
+    expect(event).toEqual({
+      id: eventId,
+      type: 'consumed',
+      logical_date: '2026-04-18',
+      created_at: 1000
+    });
+  });
+
+  it('can query consumed events via the type index', async () => {
+    await db.freezeEvents.add({
+      id: 'freeze-event-1',
+      type: 'consumed',
+      logical_date: '2026-04-18',
+      created_at: 1000
+    });
+    await db.freezeEvents.add({
+      id: 'freeze-event-2',
+      type: 'consumed',
+      logical_date: '2026-04-19',
+      created_at: 2000
+    });
+
+    const consumedEvents = await db.freezeEvents
+      .where('type')
+      .equals('consumed')
+      .toArray();
+
+    expect(consumedEvents).toHaveLength(2);
+    expect(consumedEvents.map(e => e.id)).toEqual(['freeze-event-1', 'freeze-event-2']);
+    expect(consumedEvents[0]).toMatchObject({
+      type: 'consumed',
+      logical_date: '2026-04-18',
+      created_at: 1000
+    });
+  });
+});

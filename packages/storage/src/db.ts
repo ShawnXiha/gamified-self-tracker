@@ -32,11 +32,19 @@ export interface UserStats {
   last_evaluated_date?: string;
 }
 
+export interface FreezeEvent {
+  id: string;
+  type: 'consumed';
+  logical_date: string;
+  created_at: number;
+}
+
 export class GamifiedTrackerDB extends Dexie {
   habits!: Table<Habit, string>;
   checkIns!: Table<DailyCheckIn, string>;
   streaks!: Table<StreakState, string>;
   userStats!: Table<UserStats, string>;
+  freezeEvents!: Table<FreezeEvent, string>;
 
   constructor() {
     super('GamifiedTrackerDB');
@@ -48,6 +56,17 @@ export class GamifiedTrackerDB extends Dexie {
       userStats: 'id, total_xp, current_level, freezes_available'
     }).upgrade(tx => {
       // Handle schema upgrade smoothly for the streaks table
+    });
+
+    // v3: adds the append-only freezeEvents ledger. All tables must be
+    // restated here — Dexie deletes any table omitted from a version's
+    // stores declaration during upgrade.
+    this.version(3).stores({
+      habits: 'id, title, created_at, archived_at',
+      checkIns: 'id, &[habit_id+logical_date], habit_id, logical_date, completed_at',
+      streaks: 'habit_id, current_streak, longest_streak, last_check_in_date',
+      userStats: 'id, total_xp, current_level, freezes_available',
+      freezeEvents: 'id, type, logical_date'
     });
   }
 }
