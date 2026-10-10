@@ -181,17 +181,22 @@ export async function toggleCheckIn(
 /**
  * Renames a habit. The id is preserved and no historical check-in is touched:
  * titles never feed the derived caches, so no cache rewrite is needed.
+ *
+ * The read-modify-write runs inside a transaction so a concurrent rename (or
+ * archive) cannot be clobbered by putting a stale object back. The title is
+ * trimmed before storage; a whitespace-only title is rejected up front.
  */
 export async function renameHabit(habitId: string, title: string): Promise<void> {
   if (title.trim().length === 0) {
     throw new Error('Title cannot be empty');
   }
 
-  const habit = await db.habits.get(habitId);
-  if (!habit) throw new Error('Habit not found');
+  await db.transaction('rw', db.habits, async () => {
+    const habit = await db.habits.get(habitId);
+    if (!habit) throw new Error('Habit not found');
 
-  habit.title = title;
-  await db.habits.put(habit);
+    await db.habits.put({ ...habit, title: title.trim() });
+  });
 }
 
 /**
@@ -201,35 +206,27 @@ export async function renameHabit(habitId: string, title: string): Promise<void>
  * and the freeze ledger — never on `archived_at`).
  */
 export async function archiveHabit(habitId: string): Promise<void> {
-  await db.transaction(
-    'rw',
-    [db.habits, db.checkIns, db.streaks, db.userStats, db.freezeEvents],
-    async () => {
-      const habit = await db.habits.get(habitId);
-      if (!habit) throw new Error('Habit not found');
-      if (habit.archived_at !== null) return; // Already archived: keep the original stamp.
+  await db.transaction('rw', db.habits, async () => {
+    const habit = await db.habits.get(habitId);
+    if (!habit) throw new Error('Habit not found');
+    if (habit.archived_at !== null) return; // Already archived: keep the original stamp.
 
-      habit.archived_at = Date.now();
-      await db.habits.put(habit);
-    },
-  );
+    habit.archived_at = Date.now();
+    await db.habits.put(habit);
+  });
 }
 
 /**
  * Restores an archived habit by clearing `archived_at`.
  */
 export async function unarchiveHabit(habitId: string): Promise<void> {
-  await db.transaction(
-    'rw',
-    [db.habits, db.checkIns, db.streaks, db.userStats, db.freezeEvents],
-    async () => {
-      const habit = await db.habits.get(habitId);
-      if (!habit) throw new Error('Habit not found');
+  await db.transaction('rw', db.habits, async () => {
+    const habit = await db.habits.get(habitId);
+    if (!habit) throw new Error('Habit not found');
 
-      habit.archived_at = null;
-      await db.habits.put(habit);
-    },
-  );
+    habit.archived_at = null;
+    await db.habits.put(habit);
+  });
 }
 
 /**

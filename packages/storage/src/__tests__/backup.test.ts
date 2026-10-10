@@ -118,4 +118,15 @@ describe('exportBackup (reads the live db)', () => {
     expect(payload.checkIns).toEqual([]);
     expect(payload.freezeEvents).toEqual([]);
   });
+
+  it('handles a fully empty database', async () => {
+    const payload = await exportBackup();
+
+    expect(payload.version).toBe(1);
+    expect(payload.exported_at).toBe('2026-04-17T10:00:00.000Z');
+    expect(payload.habits).toEqual([]);
+    expect(payload.checkIns).toEqual([]);
+    expect(payload.userStats).toBeUndefined();
+    expect(payload.freezeEvents).toEqual([]);
+  });
 });

@@ -89,6 +89,17 @@ describe('habit management (rename / archive / unarchive / delete)', () => {
     expect((await db.habits.get(habitId))?.title).toBe('Test Habit');
   });
 
+  it('trims leading and trailing whitespace from the stored title', async () => {
+    const habitId = 'habit-rename-trim';
+    await seedHabit(habitId);
+
+    await renameHabit(habitId, '  Foo  ');
+
+    expect((await db.habits.get(habitId))?.title).toBe('Foo');
+    expect((await db.habits.get(habitId))?.id).toBe(habitId);
+    expect((await db.habits.get(habitId))?.archived_at).toBeNull();
+  });
+
   it('archives the habit with a non-null archived_at and is idempotent', async () => {
     const habitId = 'habit-archive';
     vi.setSystemTime(new Date('2026-04-17T10:00:00.000Z'));
@@ -182,6 +193,54 @@ describe('habit management (rename / archive / unarchive / delete)', () => {
     expect((await db.habits.get(keptId))?.title).toBe('Test Habit');
     expect(await db.checkIns.where('habit_id').equals(keptId).count()).toBe(2);
     expect((await db.streaks.get(keptId))?.current_streak).toBe(2);
+  });
+
+  it('deletes a habit that has no check-ins or streak row', async () => {
+    const bareId = 'habit-delete-bare';
+    const keptId = 'habit-keep-bare';
+    vi.setSystemTime(new Date('2026-04-17T10:00:00.000Z'));
+
+    // A habit that was created but never checked in.
+    await seedHabit(bareId);
+
+    // A survivor with one check-in so the derived total stays meaningful.
+    await seedHabit(keptId);
+    await db.checkIns.add({
+      id: 'bare-keep-c1',
+      habit_id: keptId,
+      logical_date: '2026-04-15',
+      completed_at: new Date('2026-04-15T12:00:00.000Z').getTime(),
+      awarded_xp: 10,
+      streak_at_time: 1
+    });
+    await recomputeUserStatsCache();
+    expect((await db.userStats.get('current'))?.total_xp).toBe(10);
+
+    await deleteHabit(bareId);
+
+    // No orphan rows for the bare habit, and the derived state is untouched.
+    expect(await db.habits.get(bareId)).toBeUndefined();
+    expect(await db.checkIns.where('habit_id').equals(bareId).count()).toBe(0);
+    expect(await db.streaks.get(bareId)).toBeUndefined();
+    expect((await db.userStats.get('current'))?.total_xp).toBe(10);
+    expect((await db.habits.get(keptId))?.title).toBe('Test Habit');
+  });
+
+  it('deletes an already-archived habit together with its check-ins', async () => {
+    const habitId = 'habit-delete-archived';
+    vi.setSystemTime(new Date('2026-04-17T10:00:00.000Z'));
+    await seedHabit(habitId);
+    await archiveHabit(habitId);
+    await seedCheckIns(habitId);
+
+    const archived = await db.habits.get(habitId);
+    expect(archived?.archived_at).not.toBeNull();
+
+    await deleteHabit(habitId);
+
+    expect(await db.habits.get(habitId)).toBeUndefined();
+    expect(await db.checkIns.where('habit_id').equals(habitId).count()).toBe(0);
+    expect(await db.streaks.get(habitId)).toBeUndefined();
   });
 });
 

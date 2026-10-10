@@ -41,14 +41,24 @@ export function buildBackupPayload(
  * Check-ins are the source of truth, so the payload carries them alongside the
  * habit rows, the derived `userStats` cache (undefined before first use), and
  * the append-only freeze ledger.
+ *
+ * All four table reads run in a single readonly transaction, so the payload is
+ * an atomic snapshot: it can never mix rows from before and after a concurrent
+ * write (e.g., a toggle or deletion landing mid-export).
  */
 export async function exportBackup(): Promise<BackupPayload> {
-  const [habits, checkIns, userStats, freezeEvents] = await Promise.all([
-    db.habits.toArray(),
-    db.checkIns.toArray(),
-    db.userStats.get('current'),
-    db.freezeEvents.toArray(),
-  ]);
+  return db.transaction(
+    'r',
+    [db.habits, db.checkIns, db.userStats, db.freezeEvents],
+    async () => {
+      const [habits, checkIns, userStats, freezeEvents] = await Promise.all([
+        db.habits.toArray(),
+        db.checkIns.toArray(),
+        db.userStats.get('current'),
+        db.freezeEvents.toArray(),
+      ]);
 
-  return buildBackupPayload(habits, checkIns, userStats, freezeEvents);
+      return buildBackupPayload(habits, checkIns, userStats, freezeEvents);
+    },
+  );
 }
