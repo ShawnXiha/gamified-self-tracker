@@ -47,7 +47,7 @@ Tests: `npm test` in packages/domain (Vitest, 49 tests)
 
 ### storage (`packages/storage/`)
 
-IndexedDB persistence via Dexie 4. Provides React hooks using `dexie-react-hooks` and the single write path for every mutation.
+IndexedDB persistence via Dexie 4. Provides React hooks using `dexie-react-hooks` and the single mutation surface for check-ins and habit lifecycle — UI components never write to `db` directly.
 
 | File | Purpose |
 |------|---------|
@@ -77,7 +77,7 @@ React 18 SPA with Tailwind CSS 4 and PWA support.
 
 | Component | Purpose |
 |-----------|---------|
-| `App.tsx` | Boot sequence: nightly evaluation → analytics init → habit list + header; footer with archived-habits modal + JSON backup export |
+| `App.tsx` | Boot sequence: nightly evaluation (after analytics init at module scope in main.tsx) → habit list + header; footer with archived-habits modal + JSON backup export |
 | `GamificationHeader.tsx` | Displays current level + XP progress bar |
 | `HabitList.tsx` | Renders habits with empty state |
 | `DailyCheckInItem.tsx` | Checkbox toggle + streak flame + XP toast + edit/archive/delete actions menu |
