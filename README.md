@@ -8,10 +8,13 @@ A local-first PWA habit tracker that makes self-improvement lightweight, visible
 - **XP & Leveling** — earn XP for every check-in, level up with quadratic progression
 - **Streaks** — track consecutive days, visualized with a streak flame
 - **Streak Freezes** — automatic safety net. Start with 2, earn more on level-up and 7-day milestones. Capped at 5.
+- **Habit management** — rename, archive (history and stats kept), restore, or permanently delete a habit
+- **JSON backup export** — one tap downloads a versioned snapshot of all your data (import planned for a future release)
 - **Weekly Summary** — every Monday, see your consistency rate, lifetime days, longest streak, and freezes remaining
 - **04:00 AM day boundary** — no midnight panic. Your "day" ends at 4 AM.
 - **Offline-first PWA** — install on your phone, works without internet
 - **Zero backend** — all data stored in IndexedDB via Dexie
+- **E2E-tested** — 8 Playwright journeys cover the full core loop in a real browser
 
 ## Quick Start
 
@@ -31,8 +34,9 @@ Open http://localhost:5173 in your browser.
 | Command | Description |
 |---------|-------------|
 | `npm install` | Install all workspace dependencies |
-| `npm test` | Run all tests (domain + storage + ui) |
+| `npm test` | Run all unit tests (162: 19 analytics + 49 domain + 63 storage + 31 ui) |
 | `npm run build` | Build all packages for production |
+| `npm run test:e2e` | Run 8 Playwright E2E journeys (self-starts the UI on :4173) |
 | `cd packages/ui && npm run dev` | Start Vite dev server |
 | `cd packages/ui && npm run build` | Build UI for deployment to `dist/` |
 
@@ -43,24 +47,27 @@ Open http://localhost:5173 in your browser.
 | UI | React 18, TypeScript, Tailwind CSS 4, Vite 8 |
 | State | Dexie (IndexedDB) + React hooks |
 | Domain | Pure TypeScript (zero framework deps) |
+| Analytics | PostHog + Sentry — env-gated (`VITE_POSTHOG_KEY`, `VITE_SENTRY_DSN`, `VITE_POSTHOG_HOST`, `VITE_APP_VERSION`) |
 | PWA | vite-plugin-pwa, Workbox service worker |
 | Testing | Vitest, Testing Library, fake-indexeddb |
+| E2E | Playwright (Chromium, self-starting dev server) |
 | Deployment | Vercel |
 
 ## Architecture
 
-Monorepo with three packages, built from the inside out:
+Monorepo with four packages (plus an E2E test workspace), built from the inside out:
 
 ```
 packages/
-├── domain/      Pure business logic — date engine, scoring, streak evaluation
-├── storage/     IndexedDB persistence via Dexie + React hooks
+├── domain/      Pure business logic — date, scoring, streak, derive engines
+├── storage/     IndexedDB persistence via Dexie + React hooks + write services
+├── analytics/   Typed events + error reporting (PostHog/Sentry, env-gated)
 └── ui/          React SPA + PWA
+tests/
+└── e2e/         Playwright journeys against the dev server
 ```
 
-Data flow: `domain → storage → ui`. Domain has no UI dependencies. Storage depends on domain. UI depends on both.
-
-See [docs/architecture.md](docs/architecture.md) for details.
+Data flow: `domain → storage → ui`. Domain has no UI dependencies. Storage depends on domain. UI depends on storage, domain, and analytics. `checkIns` is the single source of truth — streaks, XP, and level are derived caches rebuilt from it (see [docs/architecture.md](docs/architecture.md)).
 
 ## Project Philosophy
 

@@ -86,7 +86,7 @@ describe('Database Schema', () => {
     await db.streaks.add({
       habit_id: habitId,
       current_streak: 5,
-      best_streak: 10,
+      longest_streak: 10,
       last_check_in_date: '2026-04-17'
     });
 
@@ -94,7 +94,7 @@ describe('Database Schema', () => {
     expect(streak).toEqual({
       habit_id: habitId,
       current_streak: 5,
-      best_streak: 10,
+      longest_streak: 10,
       last_check_in_date: '2026-04-17'
     });
   });

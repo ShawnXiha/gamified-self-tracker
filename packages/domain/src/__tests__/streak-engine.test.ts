@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateLogicalDay } from '../streak-engine';
 
-describe('Streak & Freeze Engine', () => {
+describe('streak-engine', () => {
   
   describe('evaluateLogicalDay', () => {
     it('returns no_scheduled_habits if nothing is scheduled', () => {
