@@ -46,7 +46,10 @@ const samplePayload: BackupPayload = {
 
 // jsdom does not implement URL.createObjectURL/revokeObjectURL, and anchor
 // clicks would attempt navigation, so both get no-op stand-ins (restored
-// after each test).
+// after each test). The originals are captured once for symmetric restores.
+const originalCreateObjectURL = URL.createObjectURL;
+const originalRevokeObjectURL = URL.revokeObjectURL;
+
 let createObjectURLMock: ReturnType<typeof vi.fn>;
 let revokeObjectURLMock: ReturnType<typeof vi.fn>;
 let clickSpy: ReturnType<typeof vi.spyOn>;
@@ -77,6 +80,8 @@ beforeEach(() => {
 afterEach(() => {
   clickSpy.mockRestore();
   createElementSpy.mockRestore();
+  URL.createObjectURL = originalCreateObjectURL;
+  URL.revokeObjectURL = originalRevokeObjectURL;
 });
 
 describe('downloadBackup', () => {
@@ -96,7 +101,10 @@ describe('downloadBackup', () => {
     expect(createdAnchors[0]!.href).toBe('blob:mock-url');
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:mock-url');
+    // Revoke is deferred to the next tick (Safari download race hardening).
+    await waitFor(() => {
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:mock-url');
+    });
   });
 
   it('defaults the filename date to the current date (YYYY-MM-DD)', () => {
@@ -104,10 +112,35 @@ describe('downloadBackup', () => {
 
     expect(createdAnchors[0]!.download).toMatch(/^gamified-backup-\d{4}-\d{2}-\d{2}\.json$/);
   });
+
+  it('keeps versioning and omits undefined fields for a habitless backup', async () => {
+    const emptyPayload: BackupPayload = {
+      version: 1,
+      exported_at: '2026-05-11T08:00:00.000Z',
+      habits: [],
+      checkIns: [],
+      userStats: undefined,
+      freezeEvents: [],
+    };
+
+    downloadBackup(emptyPayload, new Date('2026-05-11T10:00:00.000Z'));
+
+    const blob = createObjectURLMock.mock.calls[0]?.[0] as Blob;
+    const parsed = JSON.parse(await blob.text());
+    expect(parsed.version).toBe(1);
+    expect(parsed.habits).toEqual([]);
+    expect(parsed.checkIns).toEqual([]);
+    expect(parsed.freezeEvents).toEqual([]);
+    // JSON.stringify drops `undefined` — pin this so the future import path
+    // knows userStats round-trips as absent (restored as undefined).
+    expect('userStats' in parsed).toBe(false);
+  });
 });
 
 describe('App footer export backup', () => {
   beforeEach(() => {
+    // Clear call history from previous tests (keeps implementations).
+    vi.clearAllMocks();
     vi.mocked(useHabits).mockReturnValue([
       { id: '1', title: 'Drink Water', created_at: Date.now(), archived_at: null },
     ]);
@@ -138,7 +171,41 @@ describe('App footer export backup', () => {
     expect(createdAnchors).toHaveLength(1);
     expect(createdAnchors[0]!.download).toMatch(/^gamified-backup-\d{4}-\d{2}-\d{2}\.json$/);
     expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:mock-url');
+    // Revoke is deferred to the next tick (Safari download race hardening).
+    await waitFor(() => {
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:mock-url');
+    });
+  });
+
+  it('logs and recovers when exportBackup rejects, re-enabling the button for retry', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(exportBackup).mockRejectedValueOnce(new Error('boom'));
+
+    try {
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading tracker...')).not.toBeInTheDocument();
+      });
+
+      const button = screen.getByRole('button', { name: /export backup/i });
+      fireEvent.click(button);
+
+      await waitFor(() => {
+        expect(errorSpy).toHaveBeenCalledWith('Failed to export backup:', expect.any(Error));
+        expect(button).not.toBeDisabled();
+      });
+      expect(createObjectURLMock).not.toHaveBeenCalled();
+
+      // The button was re-enabled after the failure: a second click works.
+      fireEvent.click(button);
+      await waitFor(() => {
+        expect(exportBackup).toHaveBeenCalledTimes(2);
+        expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      });
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('shows the Archived entry next to the Export backup entry in the footer', async () => {

@@ -13,6 +13,7 @@ export const App: React.FC = () => {
   const archivedHabits = useArchivedHabits();
   const [showArchived, setShowArchived] = useState(false);
   const [isBooted, setIsBooted] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -44,11 +45,14 @@ export const App: React.FC = () => {
   }, []);
 
   const handleExportBackup = async () => {
+    setIsExporting(true);
     try {
       const payload = await exportBackup();
       downloadBackup(payload);
     } catch (error) {
       console.error('Failed to export backup:', error);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -76,7 +80,8 @@ export const App: React.FC = () => {
         <button
           type="button"
           onClick={handleExportBackup}
-          className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
+          disabled={isExporting}
+          className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Export backup
         </button>

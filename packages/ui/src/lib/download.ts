@@ -16,5 +16,8 @@ export function downloadBackup(payload: BackupPayload, now: Date = new Date()): 
   link.click();
   link.remove();
 
-  URL.revokeObjectURL(url);
+  // Revoke on the next tick: WebKit/Safari can abort a download when the
+  // object URL is revoked before the fetch has actually started (file-saver.js
+  // waits ~40ms; a 0ms timeout is sufficient in practice).
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
